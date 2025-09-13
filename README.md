@@ -1,2 +1,4 @@
-# Fusion-Techno
-Ubuntu Touch Penetration Testing –  A reproducible, ethical penetration testing framework targeting Ubuntu Touch environments, built for hackathon exploration and security analysis. This project demonstrates real-world auditing techniques using WSL2, custom recon scripts, brute-force testing with Hydra, and structured reporting.
+# Presentation Slides
+![Slide10](https://github.com/user-attachments/assets/b32bd2cd-0de9-4d58-89cd-4d2f580830f7)
+https://github.com/user-attachments/assets/b32bd2cd-0de9-4d58-89cd-4d2f580830f7
+
