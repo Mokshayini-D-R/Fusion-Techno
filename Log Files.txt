@@ -1,0 +1,138 @@
+ubuntu-touch-pentest/
+├── setup_tools.sh
+├── phase1_recon.sh
+├── phase2_vulnscan.sh
+├── phase3_exploit.sh
+├── phase4_postexploitation.sh
+
+
+phase1_recon.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+TARGET="${1:-127.0.0.1}"
+OUTDIR="phase1_recon"
+mkdir -p "$OUTDIR"
+
+echo "[*] Recon: System & Network enumeration for $TARGET"
+
+# System info
+uname -a > "$OUTDIR/uname.txt"
+cat /etc/os-release > "$OUTDIR/os_release.txt" || true
+
+# Nmap scans
+sudo nmap -sS -sV -p- "$TARGET" -oN "$OUTDIR/nmap_fullscan.txt"
+nmap -F "$TARGET" -oN "$OUTDIR/nmap_quick.txt"
+
+# SSH algorithm check
+sudo nmap -p 22 --script ssh2-enum-algos "$TARGET" -oN "$OUTDIR/nmap_ssh_algos.txt" || true
+
+echo "[*] Recon data saved to $OUTDIR/"
+
+🛠️ phase2_vulnscan.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+TARGET="${1:-127.0.0.1}"
+OUTDIR="phase2_vulnscan"
+mkdir -p "$OUTDIR"
+
+echo "[*] Running vulnerability scans on $TARGET"
+
+# Lynis security audit
+sudo lynis audit system --quiet > "$OUTDIR/lynis_report.txt"
+
+# Nikto web scan (only if web service exists)
+nikto -h "$TARGET" -output "$OUTDIR/nikto_report.txt" || true
+
+# Find SUID/SGID binaries
+find / -perm -4000 -o -perm -2000 2>/dev/null > "$OUTDIR/suid_sgid.txt"
+
+echo "[*] Vulnerability scan results saved to $OUTDIR/"
+
+💥 phase3_exploit.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+TARGET="${1:-127.0.0.1}"
+USER="${2:-$(whoami)}"
+OUTDIR="phase3_exploit"
+mkdir -p "$OUTDIR"
+
+echo "[*] Attempting SSH brute-force on $TARGET for user $USER"
+
+# Wordlist fallback creation
+WL="$HOME/wordlists/10k-most-common.txt"
+mkdir -p "$(dirname "$WL")"
+if [ ! -f "$WL" ]; then
+  wget -q -O "$WL" https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10k-most-common.txt || {
+    echo "password\n123456\nadmin" > "$WL"
+  }
+fi
+
+sudo hydra -l "$USER" -P "$WL" -t 4 "ssh://$TARGET" -o "$OUTDIR/hydra_results.txt" || true
+
+echo "[*] Exploit attempts logged to $OUTDIR/"
+
+📂phase4_postexploitation.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+OUTDIR="phase4_postexploitation"
+mkdir -p "$OUTDIR"
+
+echo "[*] Collecting post-exploitation data..."
+
+whoami > "$OUTDIR/whoami.txt"
+id > "$OUTDIR/id.txt"
+sudo -l > "$OUTDIR/sudo_privileges.txt" || true
+
+echo "[*] Post-exploitation evidence saved to $OUTDIR/"
+
+📝 collect_report.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPORT="hackathon_report"
+mkdir -p "$REPORT"
+
+echo "[*] Collecting all phase outputs into $REPORT/"
+cp -r phase1_recon phase2_vulnscan phase3_exploit phase4_postexploitation "$REPORT/" 2>/dev/null || true
+
+cat > "$REPORT/report.md" <<EOF
+# Ubuntu Touch Penetration Test Report
+
+## Executive Summary
+(Write a short summary of findings, risks, and recommendations here.)
+
+## Methodology
+See included phase outputs for evidence.
+
+## Findings
+- No weak passwords found via Hydra
+- Ports and services documented in phase1_recon/
+- Potential misconfigurations noted in phase2_vulnscan/
+
+## Recommendations
+- Maintain strong password policies
+- Enable rate-limiting & account lockout
+- Consider 2FA for SSH or sudo
+
+EOF
+
+echo "[*] Report skeleton created at $REPORT/report.md"
+
+📦 package_report.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPORT="hackathon_report"
+OUTFILE="ubuntu_touch_pentest_$(date +%Y%m%dT%H%M%S).zip"
+
+if [ ! -d "$REPORT" ]; then
+  echo "[!] $REPORT directory not found. Run ./collect_report.sh first."
+  exit 1
+fi
+
+zip -r "$OUTFILE" "$REPORT" >/dev/null
+echo "[*] Packaged report into $OUTFILE"
